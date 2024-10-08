@@ -1,0 +1,1306 @@
+<html><head><base href="https://websim.iptv-player.com/">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>WebSim IPTV Player with Multiple Streams</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+  :root {
+    --bg-primary: #0f0e17;
+    --bg-secondary: #1f1e27;
+    --text-primary: #fffffe;
+    --text-secondary: #a7a9be;
+    --accent: #ff8906;
+    --button-bg: #ff8906;
+    --button-text: #fffffe;
+  }
+
+  body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  .container {
+    display: flex;
+    height: 100%;
+  }
+
+  #channelList {
+    width: 300px;
+    background: var(--bg-secondary);
+    overflow-y: auto;
+    transition: margin-left 0.3s;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  }
+
+  #channelList.hidden {
+    max-height: 0;
+    overflow: hidden;
+  }
+
+  #playerContainer {
+    flex-grow: 1;
+    background: var(--bg-primary);
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    overflow: hidden;
+  }
+
+  .videoPlayer {
+    background: var(--bg-secondary);
+    position: relative;
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .videoPlayer.resizable {
+    resize: both;
+    overflow: hidden;
+    z-index: 10;
+    box-shadow: 0 0 0 2px var(--accent);
+    transition: box-shadow 0.3s ease;
+    cursor: move;
+  }
+
+  .videoPlayer.resizable:hover {
+    box-shadow: 0 0 10px 2px var(--accent);
+  }
+
+  .videoPlayer.resizable::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    cursor: move;
+  }
+
+  .videoPlayer.resizable .resize-handle {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: var(--accent);
+    z-index: 20;
+  }
+
+  .videoPlayer.resizable .resize-handle.top-left { top: 0; left: 0; cursor: nw-resize; }
+  .videoPlayer.resizable .resize-handle.top-right { top: 0; right: 0; cursor: ne-resize; }
+  .videoPlayer.resizable .resize-handle.bottom-left { bottom: 0; left: 0; cursor: sw-resize; }
+  .videoPlayer.resizable .resize-handle.bottom-right { bottom: 0; right: 0; cursor: se-resize; }
+  .videoPlayer.resizable .resize-handle.top { top: 0; left: 50%; transform: translateX(-50%); width: 100%; height: 5px; cursor: n-resize; }
+  .videoPlayer.resizable .resize-handle.right { top: 50%; right: 0; transform: translateY(-50%); width: 5px; height: 100%; cursor: e-resize; }
+  .videoPlayer.resizable .resize-handle.bottom { bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; height: 5px; cursor: s-resize; }
+  .videoPlayer.resizable .resize-handle.left { top: 50%; left: 0; transform: translateY(-50%); width: 5px; height: 100%; cursor: w-resize; }
+
+  .videoPlayer.resizable.glowing {
+    animation: glow 1.5s infinite alternate;
+  }
+
+  @keyframes glow {
+    from {
+      box-shadow: 0 0 5px 2px var(--accent);
+    }
+    to {
+      box-shadow: 0 0 20px 2px var(--accent);
+    }
+  }
+
+  .videoPlayer video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .channel {
+    padding: 15px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    transition: background 0.3s ease;
+  }
+
+  .channel-name {
+    flex: 1;
+    margin-right: 10px;
+  }
+
+  .channel-icons {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .favorite-indicator {
+    width: 36px;  
+    height: 36px; 
+    font-size: 27px; 
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 5px;
+  }
+
+  .add-stream {
+    cursor: pointer;
+    margin-left: 10px;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    transition: transform 0.3s ease;
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--text-primary);
+  }
+
+  .add-stream:hover {
+    transform: scale(1.1);
+  }
+
+  .add-stream svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  #playlistInputContainer {
+    position: relative;
+    margin-bottom: 10px;
+  }
+
+  #playlistInput {
+    width: 100%;
+    padding: 12px;
+    box-sizing: border-box;
+    background: var(--bg-primary);
+    border: 1px solid var(--text-secondary);
+    color: var(--text-primary);
+    border-radius: 4px;
+  }
+
+  #loadPlaylistBtn {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    color: var(--accent);
+    transition: transform 0.3s ease;
+  }
+
+  #loadPlaylistBtn:hover {
+    transform: translateY(-50%) scale(1.1);
+  }
+
+  #loadPlaylistBtn svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  #fileInputContainer {
+    position: relative;
+    margin-bottom: 10px;
+  }
+
+  #loadFileBtn {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    color: var(--accent);
+    transition: transform 0.3s ease;
+  }
+
+  #loadFileBtn:hover {
+    transform: translateY(-50%) scale(1.1);
+  }
+
+  #loadFileBtn svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  #playlistFile {
+    width: 100%;
+    padding: 12px;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--text-secondary);
+    color: var(--text-primary);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  #playlistFile::-webkit-file-upload-button {
+    visibility: hidden;
+    width: 0;
+  }
+
+  #playlistFile::before {
+    content: 'Choose File';
+    display: inline-block;
+    background: var(--button-bg);
+    color: var(--button-text);
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    outline: none;
+    white-space: nowrap;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 10pt;
+  }
+
+  #playlistFile:hover::before {
+    background-color: var(--accent);
+  }
+
+  #categorySelect, #searchInput {
+    width: 100%;
+    padding: 12px;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--text-secondary);
+    color: var(--text-primary);
+    border-radius: 4px;
+  }
+
+  #savedPlaylistContainer {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    background: var(--bg-secondary);
+    padding: 10px;
+    border-radius: 4px;
+  }
+
+  #savedPlaylistSelect {
+    flex-grow: 1;
+    padding: 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--text-secondary);
+    color: var(--text-primary);
+    border-radius: 4px;
+    margin-right: 5px;
+  }
+
+  #savePlaylistBtn, #deletePlaylistBtn, #editPlaylistBtn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    color: var(--accent);
+    transition: transform 0.3s ease;
+  }
+
+  #savePlaylistBtn:hover, #deletePlaylistBtn:hover, #editPlaylistBtn:hover {
+    transform: scale(1.1);
+  }
+
+  #savePlaylistBtn svg, #deletePlaylistBtn svg, #editPlaylistBtn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  #channels {
+    overflow-y: auto;
+    flex-grow: 1;
+  }
+
+  .add-stream, .favorite-stream, .favorite-indicator {
+    cursor: pointer;
+    margin-left: 10px;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    transition: transform 0.3s ease;
+  }
+
+  .favorite-indicator {
+    width: 36px;  
+    height: 36px; 
+    font-size: 27px; 
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(-6px); 
+  }
+
+  .add-stream:hover, .favorite-stream:hover, .favorite-indicator:hover {
+    transform: scale(1.1);
+  }
+
+  .favorite-indicator:hover {
+    transform: scale(1.1) translateY(-6px); 
+  }
+
+  .video-player-controls {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    background: rgba(15, 14, 23, 0.8);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+    backdrop-filter: blur(5px);
+  }
+
+  .videoPlayer:hover .video-player-controls {
+    opacity: 1;
+  }
+
+  .m3u8-input {
+    flex-grow: 1;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border: none;
+    padding: 8px;
+    margin-right: 10px;
+    border-radius: 4px;
+  }
+
+  .close-stream, .toggle-channel-list, .theme-toggle, .resize-toggle {
+    background: transparent;
+    color: var(--text-primary);
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px 8px;
+    margin-left: 5px;
+    transition: color 0.3s ease;
+  }
+
+  .close-stream:hover, .toggle-channel-list:hover, .theme-toggle:hover, .resize-toggle:hover {
+    color: var(--accent);
+  }
+
+  .resize-toggle svg, .favorite-stream img {
+    width: 18px;
+    height: 18px;
+    vertical-align: middle;
+  }
+
+  .theme-panel {
+    position: absolute;
+    top: 50px;
+    right: 10px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 20px;
+    z-index: 20;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    display: none;
+  }
+
+  .theme-panel h3 {
+    margin-top: 0;
+    color: var(--text-primary);
+  }
+
+  .theme-option {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .theme-option input[type="radio"] {
+    margin-right: 10px;
+  }
+
+  .theme-option label {
+    color: var(--text-secondary);
+  }
+
+  .favorite-stream, .favorite-indicator {
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 18px;
+    margin-left: 5px;
+    transition: transform 0.3s ease;
+  }
+
+  .favorite-stream:hover, .favorite-indicator:hover {
+    transform: scale(1.2);
+  }
+
+  .favorite-stream.favorited, .favorite-indicator.favorited {
+    color: gold;
+  }
+
+  .favorite-stream {
+    background: transparent;
+    color: var(--text-primary);
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    margin-left: 5px;
+    transition: color 0.3s ease, transform 0.3s ease;
+    transform: translateY(-3px); 
+  }
+
+  .favorite-stream:hover {
+    color: var(--accent);
+  }
+
+  .favorite-stream.favorited svg {
+    fill: gold;
+  }
+
+  .favorite-stream svg {
+    width: 18px;
+    height: 18px;
+    vertical-align: middle;
+  }
+
+  .theme-toggle {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    margin-left: 5px;
+    transition: transform 0.3s ease;
+  }
+
+  .theme-toggle:hover {
+    transform: scale(1.1);
+  }
+
+  .theme-toggle svg {
+    width: 18px;
+    height: 18px;
+    vertical-align: middle;
+  }
+
+  .popup {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--bg-secondary);
+    padding: 20px;
+    border-radius: 8px;
+    z-index: 1000;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+
+  .popup input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--text-secondary);
+    color: var(--text-primary);
+    border-radius: 4px;
+  }
+
+  .popup button {
+    padding: 10px 20px;
+    background: var(--accent);
+    color: var(--button-text);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-right: 10px;
+  }
+
+  .popup button:hover {
+    opacity: 0.9;
+  }
+
+  .popup .close-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 20px;
+    cursor: pointer;
+  }
+
+  @media (max-width: 768px) {
+    .container {
+      flex-direction: column;
+    }
+
+    #channelList {
+      width: 100%;
+      max-height: 50vh;
+      overflow-y: auto;
+    }
+
+    #playerContainer {
+      width: 100%;
+      height: auto;
+    }
+
+    .channel {
+      padding: 10px;
+    }
+
+    .channel-name {
+      font-size: 14px;
+    }
+
+    .add-stream, .favorite-stream, .favorite-indicator {
+      width: 30px;
+      height: 30px;
+    }
+
+    .favorite-indicator {
+      font-size: 24px;
+    }
+
+    #savedPlaylistContainer {
+      flex-wrap: wrap;
+    }
+
+    #savedPlaylistSelect {
+      width: 100%;
+      margin-bottom: 10px;
+    }
+
+    #deletePlaylistBtn, #editPlaylistBtn, #savePlaylistBtn {
+      padding: 8px;
+    }
+
+    .video-player-controls {
+      flex-wrap: wrap;
+    }
+
+    .m3u8-input {
+      width: 100%;
+      margin-bottom: 5px;
+    }
+
+    .close-stream, .toggle-channel-list, .theme-toggle, .resize-toggle {
+      padding: 8px;
+      font-size: 16px;
+    }
+
+    .videoPlayer {
+      width: 100% !important;
+      height: auto !important;
+      position: relative !important;
+      left: 0 !important;
+      top: 0 !important;
+      margin-bottom: 10px;
+    }
+
+    .videoPlayer video {
+      height: 56.25vw; /* 16:9 aspect ratio */
+    }
+
+    .theme-panel {
+      width: 80%;
+      left: 10%;
+      right: 10%;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div id="channelList">
+    <div id="savedPlaylistContainer">
+      <select id="savedPlaylistSelect">
+        <option value="">Select a saved playlist</option>
+      </select>
+      <button id="deletePlaylistBtn" title="Delete Playlist">
+        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
+        </svg>
+      </button>
+      <button id="editPlaylistBtn" title="Edit Playlist Name">
+        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+        </svg>
+      </button>
+      <button id="savePlaylistBtn" title="Save Playlist">
+        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+          <polyline points="17 21 17 13 7 13 7 21"></polyline>
+          <polyline points="7 3 7 8 15 8"></polyline>
+        </svg>
+      </button>
+    </div>
+    <div id="playlistInputContainer">
+      <input type="text" id="playlistInput" placeholder="Enter M3U playlist URL">
+      <button id="loadPlaylistBtn" title="Load Playlist">
+        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+      </button>
+    </div>
+    <div id="fileInputContainer">
+      <input type="file" id="playlistFile" accept=".m3u,.m3u8">
+      <button id="loadFileBtn" title="Load/Reload File">
+        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 4v6h-6"></path>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+      </button>
+    </div>
+    <select id="categorySelect">
+      <option value="all">All Categories</option>
+      <option value="favorites">Favorites</option>
+    </select>
+    <input type="text" id="searchInput" placeholder="Search channels...">
+    <div id="channels"></div>
+  </div>
+  <div id="playerContainer"></div>
+</div>
+
+<script>
+const channelList = document.getElementById('channelList');
+const channelsContainer = document.getElementById('channels');
+const playerContainer = document.getElementById('playerContainer');
+const playlistInput = document.getElementById('playlistInput');
+const playlistFile = document.getElementById('playlistFile');
+const savedPlaylistSelect = document.getElementById('savedPlaylistSelect');
+const savePlaylistBtn = document.getElementById('savePlaylistBtn');
+const deletePlaylistBtn = document.getElementById('deletePlaylistBtn');
+const editPlaylistBtn = document.getElementById('editPlaylistBtn');
+const categorySelect = document.getElementById('categorySelect');
+const searchInput = document.getElementById('searchInput');
+const loadPlaylistBtn = document.getElementById('loadPlaylistBtn');
+const loadFileBtn = document.getElementById('loadFileBtn');
+
+let allChannels = [];
+let playerCount = 0;
+let favorites = JSON.parse(localStorage.getItem('favorites')) || [];
+
+loadPlaylistBtn.addEventListener('click', loadPlaylistFromInput);
+loadFileBtn.addEventListener('click', () => {
+  if (playlistFile.files.length > 0) {
+    loadFileContent(playlistFile.files[0]);
+  } else {
+    playlistFile.click();
+  }
+});
+
+function loadPlaylistFromInput() {
+  const url = playlistInput.value.trim();
+  if (url) {
+    loadPlaylist(url);
+  }
+}
+
+playlistInput.removeEventListener('change', loadPlaylistFromInput);
+
+function loadPlaylist(url) {
+  channelsContainer.innerHTML = '<div>Loading...</div>';
+  loadPlaylistBtn.disabled = true;
+
+  fetch(url)
+    .then(response => response.text())
+    .then(data => {
+      processPlaylistContent(data);
+    })
+    .catch(error => {
+      console.error('Error loading playlist:', error);
+      channelsContainer.innerHTML = '<div>Error loading playlist. Please try again.</div>';
+    })
+    .finally(() => {
+      loadPlaylistBtn.disabled = false;
+    });
+}
+
+playlistFile.addEventListener('change', (e) => {
+  if (e.target.files.length > 0) {
+    loadFileContent(e.target.files[0]);
+  }
+});
+
+function loadFileContent(file) {
+  loadFileBtn.disabled = true;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const content = e.target.result;
+    processPlaylistContent(content);
+    loadFileBtn.disabled = false;
+  };
+  reader.readAsText(file);
+}
+
+function processPlaylistContent(content) {
+  channelsContainer.innerHTML = '<div>Processing playlist...</div>';
+  allChannels = parseM3U(content);
+  updateCategories(allChannels);
+  const filteredChannels = filterChannels('all', searchInput.value.toLowerCase());
+  displayChannels(filteredChannels);
+  loadSavedPlaylists();
+}
+
+function parseM3U(data) {
+  const lines = data.split('\n');
+  const channels = [];
+  let currentChannel = {};
+
+  for (let line of lines) {
+    line = line.trim();
+    if (line.startsWith('#EXTINF:')) {
+      const parts = line.split(',');
+      currentChannel.name = parts[1];
+      const groupMatch = line.match(/group-title="([^"]*)"/);
+      currentChannel.category = groupMatch ? groupMatch[1] : 'Uncategorized';
+    } else if (line.startsWith('http')) {
+      currentChannel.url = line;
+      channels.push(currentChannel);
+      currentChannel = {};
+    }
+  }
+
+  return channels;
+}
+
+function updateCategories(channels) {
+  const categories = new Set(channels.map(channel => channel.category));
+  categorySelect.innerHTML = `
+    <option value="all">All Categories</option>
+    <option value="favorites">Favorites</option>
+  `;
+  categories.forEach(category => {
+    const option = document.createElement('option');
+    option.value = category;
+    option.textContent = category;
+    categorySelect.appendChild(option);
+  });
+}
+
+function loadSavedPlaylists() {
+  const savedPlaylists = JSON.parse(localStorage.getItem('savedPlaylists')) || {};
+  savedPlaylistSelect.innerHTML = '<option value="">Select a saved playlist</option>';
+  for (const [name] of Object.entries(savedPlaylists)) {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    savedPlaylistSelect.appendChild(option);
+  }
+}
+
+function deletePlaylist() {
+  const selectedPlaylist = savedPlaylistSelect.value;
+  if (selectedPlaylist) {
+    const savedPlaylists = JSON.parse(localStorage.getItem('savedPlaylists')) || {};
+    delete savedPlaylists[selectedPlaylist];
+    localStorage.setItem('savedPlaylists', JSON.stringify(savedPlaylists));
+    loadSavedPlaylists();
+    alert(`Playlist "${selectedPlaylist}" has been deleted.`);
+  } else {
+    alert('Please select a playlist to delete.');
+  }
+}
+
+function editPlaylistName() {
+  const selectedPlaylist = savedPlaylistSelect.value;
+  if (selectedPlaylist) {
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+    popup.innerHTML = `
+      <button class="close-btn">&times;</button>
+      <input type="text" id="editPlaylistNameInput" value="${selectedPlaylist}" placeholder="Enter new playlist name">
+      <button id="confirmEditBtn">Save</button>
+      <button id="cancelEditBtn">Cancel</button>
+    `;
+    document.body.appendChild(popup);
+    popup.style.display = 'block';
+
+    const confirmEditBtn = document.getElementById('confirmEditBtn');
+    const cancelEditBtn = document.getElementById('cancelEditBtn');
+    const closeBtn = popup.querySelector('.close-btn');
+
+    confirmEditBtn.addEventListener('click', () => {
+      const newPlaylistName = document.getElementById('editPlaylistNameInput').value;
+      if (newPlaylistName && newPlaylistName !== selectedPlaylist) {
+        const savedPlaylists = JSON.parse(localStorage.getItem('savedPlaylists')) || {};
+        savedPlaylists[newPlaylistName] = savedPlaylists[selectedPlaylist];
+        delete savedPlaylists[selectedPlaylist];
+        localStorage.setItem('savedPlaylists', JSON.stringify(savedPlaylists));
+        loadSavedPlaylists();
+        popup.style.display = 'none';
+        document.body.removeChild(popup);
+      }
+    });
+
+    cancelEditBtn.addEventListener('click', () => {
+      popup.style.display = 'none';
+      document.body.removeChild(popup);
+    });
+
+    closeBtn.addEventListener('click', () => {
+      popup.style.display = 'none';
+      document.body.removeChild(popup);
+    });
+  } else {
+    alert('Please select a playlist to edit.');
+  }
+}
+
+// Add event listener for delete button
+deletePlaylistBtn.addEventListener('click', deletePlaylist);
+
+// Add event listener for edit button
+editPlaylistBtn.addEventListener('click', editPlaylistName);
+
+savePlaylistBtn.addEventListener('click', () => {
+  const popup = document.createElement('div');
+  popup.className = 'popup';
+  popup.innerHTML = `
+    <button class="close-btn">&times;</button>
+    <input type="text" id="playlistNameInput" placeholder="Enter playlist name">
+    <button id="confirmSaveBtn">Save</button>
+    <button id="cancelSaveBtn">Cancel</button>
+  `;
+  document.body.appendChild(popup);
+  popup.style.display = 'block';
+
+  const confirmSaveBtn = document.getElementById('confirmSaveBtn');
+  const cancelSaveBtn = document.getElementById('cancelSaveBtn');
+  const closeBtn = popup.querySelector('.close-btn');
+
+  confirmSaveBtn.addEventListener('click', () => {
+    const playlistName = document.getElementById('playlistNameInput').value;
+    if (playlistName) {
+      const savedPlaylists = JSON.parse(localStorage.getItem('savedPlaylists')) || {};
+      savedPlaylists[playlistName] = allChannels;
+      localStorage.setItem('savedPlaylists', JSON.stringify(savedPlaylists));
+      loadSavedPlaylists();
+      popup.style.display = 'none';
+      document.body.removeChild(popup);
+    }
+  });
+
+  cancelSaveBtn.addEventListener('click', () => {
+    popup.style.display = 'none';
+    document.body.removeChild(popup);
+  });
+
+  closeBtn.addEventListener('click', () => {
+    popup.style.display = 'none';
+    document.body.removeChild(popup);
+  });
+});
+
+savedPlaylistSelect.addEventListener('change', (e) => {
+  const selectedPlaylist = e.target.value;
+  if (selectedPlaylist) {
+    const savedPlaylists = JSON.parse(localStorage.getItem('savedPlaylists')) || {};
+    allChannels = savedPlaylists[selectedPlaylist];
+    updateCategories(allChannels);
+    const filteredChannels = filterChannels('all', searchInput.value.toLowerCase());
+    displayChannels(filteredChannels);
+  }
+});
+
+function filterChannels(category, searchQuery) {
+  let channels = category === 'favorites' ? favorites : allChannels;
+  
+  if (category !== 'all' && category !== 'favorites') {
+    channels = channels.filter(channel => channel.category === category);
+  }
+  
+  if (searchQuery) {
+    channels = channels.filter(channel => 
+      channel.name.toLowerCase().includes(searchQuery) ||
+      channel.category.toLowerCase().includes(searchQuery)
+    );
+  }
+  
+  return channels;
+}
+
+searchInput.addEventListener('input', () => {
+  const selectedCategory = categorySelect.value;
+  const searchQuery = searchInput.value.toLowerCase();
+  let filteredChannels = filterChannels(selectedCategory, searchQuery);
+  displayChannels(filteredChannels);
+});
+
+categorySelect.addEventListener('change', () => {
+  const selectedCategory = categorySelect.value;
+  const searchQuery = searchInput.value.toLowerCase();
+  let filteredChannels = filterChannels(selectedCategory, searchQuery);
+  displayChannels(filteredChannels);
+});
+
+function displayChannels(channels) {
+  channelsContainer.innerHTML = '';
+  channels.forEach((channel, index) => {
+    const channelElement = document.createElement('div');
+    channelElement.className = 'channel';
+    const isFavorite = favorites.some(fav => fav.url === channel.url);
+    channelElement.innerHTML = `
+      <span class="channel-name">${channel.name}</span>
+      <div class="channel-icons">
+        <span class="favorite-indicator ${isFavorite ? 'favorited' : ''}">${isFavorite ? '★' : '☆'}</span>
+        <button class="add-stream">
+          <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
+            <polyline points="17 2 12 7 7 2"></polyline>
+            <line x1="12" y1="12" x2="12" y2="17"></line>
+            <line x1="9.5" y1="14.5" x2="14.5" y2="14.5"></line>
+          </svg>
+        </button>
+      </div>
+    `;
+    channelElement.querySelector('.channel-name').addEventListener('click', () => {
+      playInDefaultPlayer(channel);
+    });
+    channelElement.querySelector('.add-stream').addEventListener('click', () => addStream(channel, true));
+    channelElement.querySelector('.favorite-indicator').addEventListener('click', (e) => {
+      toggleFavorite(channel, e.target);
+      displayChannels(channels);
+    });
+    channelsContainer.appendChild(channelElement);
+  });
+}
+
+function toggleFavorite(channel, element) {
+  const index = favorites.findIndex(fav => fav.url === channel.url);
+  if (index === -1) {
+    favorites.push(channel);
+    element.classList.add('favorited');
+    element.textContent = '★';
+  } else {
+    favorites.splice(index, 1);
+    element.classList.remove('favorited');
+    element.textContent = '☆';
+  }
+  localStorage.setItem('favorites', JSON.stringify(favorites));
+  
+  if (categorySelect.value === 'favorites') {
+    const searchQuery = searchInput.value.toLowerCase();
+    const filteredChannels = filterChannels('favorites', searchQuery);
+    displayChannels(filteredChannels);
+  }
+}
+
+function playInDefaultPlayer(channel) {
+  addStream(channel);
+}
+
+function addStream(channel, forceNewPlayer = false) {
+  if (!forceNewPlayer && playerCount > 0) {
+    playChannel(channel.url, 0);
+    return;
+  }
+
+  if (playerCount >= 8) {
+    alert('Maximum number of players (8) reached.');
+    return;
+  }
+
+  playerCount++;
+  const playerDiv = document.createElement('div');
+  playerDiv.className = 'videoPlayer';
+  playerDiv.style.width = '100%';
+  playerDiv.style.height = '100%';
+  
+  const controlsDiv = document.createElement('div');
+  controlsDiv.className = 'video-player-controls';
+  
+  const m3u8Input = document.createElement('input');
+  m3u8Input.type = 'text';
+  m3u8Input.className = 'm3u8-input';
+  m3u8Input.placeholder = 'Enter M3U8 URL';
+  m3u8Input.value = channel.url;
+  m3u8Input.addEventListener('change', (e) => playChannel(e.target.value, Array.from(playerContainer.children).indexOf(playerDiv)));
+  controlsDiv.appendChild(m3u8Input);
+
+  const starBtn = document.createElement('button');
+  starBtn.className = 'favorite-stream';
+  const isFavorite = favorites.some(fav => fav.url === channel.url);
+  starBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+    </svg>
+  `;
+  starBtn.classList.toggle('favorited', isFavorite);
+  starBtn.addEventListener('click', () => toggleFavorite(channel, starBtn));
+  controlsDiv.appendChild(starBtn);
+
+  const resizeToggle = document.createElement('button');
+  resizeToggle.className = 'resize-toggle';
+  resizeToggle.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+    </svg>
+  `;
+  resizeToggle.addEventListener('click', () => toggleResizeMode(playerDiv));
+  controlsDiv.appendChild(resizeToggle);
+
+  const toggleChannelListBtn = document.createElement('button');
+  toggleChannelListBtn.className = 'toggle-channel-list';
+  toggleChannelListBtn.innerHTML = '☰';
+  toggleChannelListBtn.addEventListener('click', toggleChannelList);
+  controlsDiv.appendChild(toggleChannelListBtn);
+
+  const themeToggle = document.createElement('button');
+  themeToggle.className = 'theme-toggle';
+  themeToggle.innerHTML = `
+    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+    </svg>
+  `;
+  themeToggle.addEventListener('click', () => toggleThemes(playerDiv));
+  controlsDiv.appendChild(themeToggle);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'close-stream';
+  closeBtn.textContent = '×';
+  closeBtn.addEventListener('click', () => removeStream(playerDiv));
+  controlsDiv.appendChild(closeBtn);
+
+  playerDiv.appendChild(controlsDiv);
+
+  const themePanel = document.createElement('div');
+  themePanel.className = 'theme-panel';
+  themePanel.style.display = 'none';
+  themePanel.innerHTML = `
+    <h3>Themes</h3>
+    <div class="theme-option">
+      <input type="radio" id="nebula-${playerCount}" name="theme-${playerCount}" value="nebula" checked>
+      <label for="nebula-${playerCount}">Nebula</label>
+    </div>
+    <div class="theme-option">
+      <input type="radio" id="light-${playerCount}" name="theme-${playerCount}" value="light">
+      <label for="light-${playerCount}">Light</label>
+    </div>
+    <div class="theme-option">
+      <input type="radio" id="dark-${playerCount}" name="theme-${playerCount}" value="dark">
+      <label for="dark-${playerCount}">Dark</label>
+    </div>
+  `;
+  playerDiv.appendChild(themePanel);
+
+  const video = document.createElement('video');
+  video.controls = true;
+  playerDiv.appendChild(video);
+
+  playerContainer.appendChild(playerDiv);
+  playChannel(channel.url, playerCount - 1);
+  adjustPlayerLayout();
+}
+
+function toggleThemes(playerDiv) {
+  const themePanel = playerDiv.querySelector('.theme-panel');
+  if (themePanel) {
+    themePanel.style.display = themePanel.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+function removeStream(playerDiv) {
+  playerDiv.remove();
+  playerCount--;
+  adjustPlayerLayout();
+}
+
+function adjustPlayerLayout() {
+  const players = Array.from(playerContainer.querySelectorAll('.videoPlayer')).filter(player => !player.classList.contains('resizable'));
+  const playerCount = players.length;
+
+  if (window.innerWidth <= 768) {
+    players.forEach((player) => {
+      player.style.width = '100%';
+      player.style.height = 'auto';
+      player.style.position = 'relative';
+      player.style.left = '0';
+      player.style.top = '0';
+    });
+  } else {
+    let cols, rows;
+
+    if (playerCount <= 1) {
+      cols = 1;
+      rows = 1;
+    } else if (playerCount <= 2) {
+      cols = 2;
+      rows = 1;
+    } else if (playerCount <= 4) {
+      cols = 2;
+      rows = 2;
+    } else {
+      cols = 3;
+      rows = Math.ceil(playerCount / 3);
+    }
+
+    const playerWidth = 100 / cols;
+    const playerHeight = 100 / rows;
+
+    players.forEach((player, index) => {
+      player.style.width = `${playerWidth}%`;
+      player.style.height = `${playerHeight}%`;
+      player.style.position = 'absolute';
+      player.style.left = `${(index % cols) * playerWidth}%`;
+      player.style.top = `${Math.floor(index / cols) * playerHeight}%`;
+    });
+  }
+}
+
+// Add this function to handle the channel list toggle on mobile
+function toggleChannelListMobile() {
+  if (window.innerWidth <= 768) {
+    channelList.classList.toggle('hidden');
+  }
+}
+
+// Modify the existing toggleChannelList function
+function toggleChannelList() {
+  if (window.innerWidth <= 768) {
+    toggleChannelListMobile();
+  } else {
+    channelList.classList.toggle('hidden');
+  }
+}
+
+// Add an event listener for window resize
+window.addEventListener('resize', adjustPlayerLayout);
+
+function playChannel(url, playerIndex) {
+  const videoPlayers = playerContainer.querySelectorAll('.videoPlayer');
+  if (playerIndex >= videoPlayers.length) {
+    console.error('Player index out of bounds');
+    return;
+  }
+
+  const videoPlayer = videoPlayers[playerIndex];
+  const video = videoPlayer.querySelector('video');
+  const m3u8Input = videoPlayer.querySelector('.m3u8-input');
+
+  if (!video || !m3u8Input) {
+    console.error('Video or m3u8 input not found');
+    return;
+  }
+
+  m3u8Input.value = url;
+
+  if (Hls.isSupported()) {
+    const hls = new Hls();
+    hls.loadSource(url);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, function() {
+      playVideoWithRetry(video);
+    });
+    hls.on(Hls.Events.ERROR, function(event, data) {
+      console.error('HLS error:', data);
+      if (data.fatal) {
+        switch(data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            console.log('Fatal network error encountered, trying to recover...');
+            hls.startLoad();
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            console.log('Fatal media error encountered, trying to recover...');
+            hls.recoverMediaError();
+            break;
+          default:
+            console.error('Fatal error, cannot recover');
+            hls.destroy();
+            break;
+        }
+      }
+    });
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = url;
+    video.addEventListener('loadedmetadata', function() {
+      playVideoWithRetry(video);
+    });
+  }
+}
+
+function playVideoWithRetry(video, retryCount = 0) {
+  setTimeout(() => {
+    video.play()
+      .then(() => {
+        console.log('Playback started successfully');
+      })
+      .catch(error => {
+        console.warn('Error attempting to play:', error);
+        if (retryCount < 3) {
+          console.log(`Retrying playback... Attempt ${retryCount + 1}`);
+          playVideoWithRetry(video, retryCount + 1);
+        } else {
+          console.error('Failed to start playback after multiple attempts');
+        }
+      });
+  }, 100);
+}
+
+function initializePage() {
+  loadSavedPlaylists();
+}
+
+document.addEventListener('DOMContentLoaded', initializePage);
+
+document.addEventListener('change', function(e) {
+  if (e.target && e.target.name && e.target.name.startsWith('theme-')) {
+    const theme = e.target.value;
+    const root = document.documentElement;
+    
+    switch(theme) {
+      case 'nebula':
+        root.style.setProperty('--bg-primary', '#0f0e17');
+        root.style.setProperty('--bg-secondary', '#1f1e27');
+        root.style.setProperty('--text-primary', '#fffffe');
+        root.style.setProperty('--text-secondary', '#a7a9be');
+        root.style.setProperty('--accent', '#ff8906');
+        root.style.setProperty('--button-bg', '#ff8906');
+        root.style.setProperty('--button-text', '#fffffe');
+        break;
+      case 'light':
+        root.style.setProperty('--bg-primary', '#ffffff');
+        root.style.setProperty('--bg-secondary', '#f0f0f0');
+        root.style.setProperty('--text-primary', '#2b2c34');
+        root.style.setProperty('--text-secondary', '#6b6c74');
+        root.style.setProperty('--accent', '#6246ea');
+        root.style.setProperty('--button-bg', '#6246ea');
+        root.style.setProperty('--button-text', '#ffffff');
+        break;
+      case 'dark':
+        root.style.setProperty('--bg-primary', '#16161a');
+        root.style.setProperty('--bg-secondary', '#242629');
+        root.style.setProperty('--text-primary', '#fffffe');
+        root.style.setProperty('--text-secondary', '#94a1b2');
+        root.style.setProperty('--accent', '#7f5af0');
+        root.style.setProperty('--button-bg', '#7f5af0');
+        root.style.setProperty('--button-text', '#fffffe');
+        break;
+    }
+  }
+});
+</script>
+</body></html>
