@@ -1,7 +1,7 @@
 <html><head><base href="https://websim.iptv-player.com/">
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>WebSim IPTV Player with Multiple Streams</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IPTV Mosaic Multi-Screen Player (Beta)</title>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <style>
   :root {
@@ -40,8 +40,7 @@
   }
 
   #channelList.hidden {
-    max-height: 0;
-    overflow: hidden;
+    margin-left: -300px;
   }
 
   #playerContainer {
@@ -546,30 +545,53 @@
     cursor: pointer;
   }
 
-  @media (max-width: 768px) {
+  @media screen and (max-width: 768px) {
     .container {
       flex-direction: column;
     }
 
     #channelList {
       width: 100%;
-      max-height: none;
       height: auto;
-      overflow-y: visible;
+      max-height: none;
     }
 
     #playerContainer {
-      display: none;
-    }
-
-    body.landscape #channelList {
-      display: none;
-    }
-
-    body.landscape #playerContainer {
-      display: flex;
       width: 100%;
-      height: 100vh;
+      height: auto;
+    }
+
+    .videoPlayer {
+      width: 100% !important;
+      height: auto !important;
+      position: relative !important;
+      left: 0 !important;
+      top: 0 !important;
+    }
+
+    @media (orientation: portrait) {
+      #channelList {
+        display: block;
+      }
+
+      #playerContainer {
+        display: none;
+      }
+    }
+
+    @media (orientation: landscape) {
+      #channelList {
+        display: none;
+      }
+
+      #playerContainer {
+        display: flex;
+        height: 100vh;
+      }
+
+      .videoPlayer {
+        height: 100% !important;
+      }
     }
   }
 </style>
@@ -925,7 +947,7 @@ function displayChannels(channels) {
       </div>
     `;
     channelElement.querySelector('.channel-name').addEventListener('click', () => {
-      selectChannelMobile(channel);
+      playInDefaultPlayer(channel);
     });
     channelElement.querySelector('.add-stream').addEventListener('click', () => addStream(channel, true));
     channelElement.querySelector('.favorite-indicator').addEventListener('click', (e) => {
@@ -934,16 +956,6 @@ function displayChannels(channels) {
     });
     channelsContainer.appendChild(channelElement);
   });
-}
-
-function selectChannelMobile(channel) {
-  if (window.innerWidth <= 768) {
-    addStream(channel);
-    document.body.classList.add('landscape');
-    adjustPlayerLayout();
-  } else {
-    playInDefaultPlayer(channel);
-  }
 }
 
 function toggleFavorite(channel, element) {
@@ -1089,74 +1101,32 @@ function removeStream(playerDiv) {
 function adjustPlayerLayout() {
   const players = Array.from(playerContainer.querySelectorAll('.videoPlayer')).filter(player => !player.classList.contains('resizable'));
   const playerCount = players.length;
+  let cols, rows;
 
-  if (window.innerWidth <= 768) {
-    players.forEach((player) => {
-      player.style.width = '100%';
-      player.style.height = '100%';
-      player.style.position = 'absolute';
-      player.style.left = '0';
-      player.style.top = '0';
-    });
+  if (playerCount <= 1) {
+    cols = 1;
+    rows = 1;
+  } else if (playerCount <= 2) {
+    cols = 2;
+    rows = 1;
+  } else if (playerCount <= 4) {
+    cols = 2;
+    rows = 2;
   } else {
-    let cols, rows;
-
-    if (playerCount <= 1) {
-      cols = 1;
-      rows = 1;
-    } else if (playerCount <= 2) {
-      cols = 2;
-      rows = 1;
-    } else if (playerCount <= 4) {
-      cols = 2;
-      rows = 2;
-    } else {
-      cols = 3;
-      rows = Math.ceil(playerCount / 3);
-    }
-
-    const playerWidth = 100 / cols;
-    const playerHeight = 100 / rows;
-
-    players.forEach((player, index) => {
-      player.style.width = `${playerWidth}%`;
-      player.style.height = `${playerHeight}%`;
-      player.style.position = 'absolute';
-      player.style.left = `${(index % cols) * playerWidth}%`;
-      player.style.top = `${Math.floor(index / cols) * playerHeight}%`;
-    });
+    cols = 3;
+    rows = Math.ceil(playerCount / 3);
   }
-}
 
-// Add this function to handle the channel list toggle on mobile
-function toggleChannelListMobile() {
-  if (window.innerWidth <= 768) {
-    channelList.classList.toggle('hidden');
-  }
-}
+  const playerWidth = 100 / cols;
+  const playerHeight = 100 / rows;
 
-// Modify the existing toggleChannelList function
-function toggleChannelList() {
-  if (window.innerWidth <= 768) {
-    toggleChannelListMobile();
-  } else {
-    channelList.classList.toggle('hidden');
-  }
-}
-
-// Add an event listener for window resize
-window.addEventListener('resize', adjustPlayerLayout);
-window.addEventListener('orientationchange', handleOrientationChange);
-
-function handleOrientationChange() {
-  if (window.innerWidth <= 768) {
-    if (window.orientation === 90 || window.orientation === -90) {
-      document.body.classList.add('landscape');
-    } else {
-      document.body.classList.remove('landscape');
-    }
-    adjustPlayerLayout();
-  }
+  players.forEach((player, index) => {
+    player.style.width = `${playerWidth}%`;
+    player.style.height = `${playerHeight}%`;
+    player.style.position = 'absolute';
+    player.style.left = `${(index % cols) * playerWidth}%`;
+    player.style.top = `${Math.floor(index / cols) * playerHeight}%`;
+  });
 }
 
 function playChannel(url, playerIndex) {
@@ -1229,9 +1199,123 @@ function playVideoWithRetry(video, retryCount = 0) {
   }, 100);
 }
 
+function toggleChannelList() {
+  channelList.classList.toggle('hidden');
+}
+
+function toggleResizeMode(playerDiv) {
+  playerDiv.classList.toggle('resizable');
+  const isResizable = playerDiv.classList.contains('resizable');
+  
+  if (isResizable) {
+    playerDiv.style.position = 'absolute';
+    playerDiv.style.zIndex = '10';
+    playerDiv.classList.add('glowing');
+    
+    playerDiv.dataset.originalWidth = playerDiv.offsetWidth;
+    playerDiv.dataset.originalHeight = playerDiv.offsetHeight;
+    
+    playerDiv.style.minWidth = '200px';
+    playerDiv.style.minHeight = '150px';
+    
+    const handles = ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'top', 'right', 'bottom', 'left'];
+    handles.forEach(position => {
+      const handle = document.createElement('div');
+      handle.className = `resize-handle ${position}`;
+      playerDiv.appendChild(handle);
+    });
+    
+    playerDiv.addEventListener('mousedown', initResize);
+  } else {
+    playerDiv.style.position = '';
+    playerDiv.style.zIndex = '';
+    playerDiv.classList.remove('glowing');
+    
+    playerDiv.style.width = `${playerDiv.dataset.originalWidth}px`;
+    playerDiv.style.height = `${playerDiv.dataset.originalHeight}px`;
+    
+    playerDiv.style.minWidth = '';
+    playerDiv.style.minHeight = '';
+    
+    playerDiv.querySelectorAll('.resize-handle').forEach(handle => handle.remove());
+    
+    playerDiv.removeEventListener('mousedown', initResize);
+    
+    adjustPlayerLayout();
+  }
+}
+
+function initResize(e) {
+  if (!e.target.classList.contains('resize-handle') && e.target !== e.currentTarget) return;
+  
+  e.preventDefault();
+  const playerDiv = e.currentTarget;
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const startWidth = playerDiv.offsetWidth;
+  const startHeight = playerDiv.offsetHeight;
+  const startLeft = playerDiv.offsetLeft;
+  const startTop = playerDiv.offsetTop;
+
+  const resizeType = e.target.classList.contains('resize-handle') ? e.target.className.split(' ')[1] : 'move';
+
+  function resize(e) {
+    const deltaX = e.clientX - startX;
+    const deltaY = e.clientY - startY;
+
+    switch (resizeType) {
+      case 'top-left':
+        playerDiv.style.width = `${startWidth - deltaX}px`;
+        playerDiv.style.height = `${startHeight - deltaY}px`;
+        playerDiv.style.left = `${startLeft + deltaX}px`;
+        playerDiv.style.top = `${startTop + deltaY}px`;
+        break;
+      case 'top-right':
+        playerDiv.style.width = `${startWidth + deltaX}px`;
+        playerDiv.style.height = `${startHeight - deltaY}px`;
+        playerDiv.style.top = `${startTop + deltaY}px`;
+        break;
+      case 'bottom-left':
+        playerDiv.style.width = `${startWidth - deltaX}px`;
+        playerDiv.style.height = `${startHeight + deltaY}px`;
+        playerDiv.style.left = `${startLeft + deltaX}px`;
+        break;
+      case 'bottom-right':
+        playerDiv.style.width = `${startWidth + deltaX}px`;
+        playerDiv.style.height = `${startHeight + deltaY}px`;
+        break;
+      case 'top':
+        playerDiv.style.height = `${startHeight - deltaY}px`;
+        playerDiv.style.top = `${startTop + deltaY}px`;
+        break;
+      case 'right':
+        playerDiv.style.width = `${startWidth + deltaX}px`;
+        break;
+      case 'bottom':
+        playerDiv.style.height = `${startHeight + deltaY}px`;
+        break;
+      case 'left':
+        playerDiv.style.width = `${startWidth - deltaX}px`;
+        playerDiv.style.left = `${startLeft + deltaX}px`;
+        break;
+      case 'move':
+        playerDiv.style.left = `${startLeft + deltaX}px`;
+        playerDiv.style.top = `${startTop + deltaY}px`;
+        break;
+    }
+  }
+
+  function stopResize() {
+    document.removeEventListener('mousemove', resize);
+    document.removeEventListener('mouseup', stopResize);
+  }
+
+  document.addEventListener('mousemove', resize);
+  document.addEventListener('mouseup', stopResize);
+}
+
 function initializePage() {
   loadSavedPlaylists();
-  handleOrientationChange();
 }
 
 document.addEventListener('DOMContentLoaded', initializePage);
@@ -1272,5 +1356,25 @@ document.addEventListener('change', function(e) {
     }
   }
 });
+
+function handleMobileOrientation() {
+  if (window.innerWidth <= 768) {
+    const isPortrait = window.innerHeight > window.innerWidth;
+    const channelList = document.getElementById('channelList');
+    const playerContainer = document.getElementById('playerContainer');
+
+    if (isPortrait) {
+      channelList.style.display = 'block';
+      playerContainer.style.display = 'none';
+    } else {
+      channelList.style.display = 'none';
+      playerContainer.style.display = 'flex';
+    }
+  }
+}
+
+window.addEventListener('load', handleMobileOrientation);
+window.addEventListener('resize', handleMobileOrientation);
+window.addEventListener('orientationchange', handleMobileOrientation);
 </script>
 </body></html>
