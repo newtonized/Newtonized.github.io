@@ -558,15 +558,11 @@
 
     #playerContainer {
       width: 100%;
-      height: auto;
+      height: 100vh;
     }
 
     .videoPlayer {
-      width: 100% !important;
-      height: auto !important;
-      position: relative !important;
-      left: 0 !important;
-      top: 0 !important;
+      position: absolute !important;
     }
 
     @media (orientation: portrait) {
@@ -587,10 +583,6 @@
       #playerContainer {
         display: flex;
         height: 100vh;
-      }
-
-      .videoPlayer {
-        height: 100% !important;
       }
     }
   }
@@ -1370,6 +1362,8 @@ function handleMobileOrientation() {
       channelList.style.display = 'none';
       playerContainer.style.display = 'flex';
     }
+
+    adjustPlayerLayout();
   }
 }
 
